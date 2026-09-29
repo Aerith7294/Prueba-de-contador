@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Contador con cámara</title>
+
+<title>Contador con cámara frontal</title>
 
 <style>
     * {
@@ -23,9 +24,9 @@
     }
 
     #contador {
-        font-size: 60px;
+        font-size: 65px;
         font-weight: bold;
-        margin: 10px;
+        margin: 5px;
     }
 
     .camara {
@@ -41,23 +42,25 @@
     video {
         width: 100%;
         display: block;
+
+        /* Efecto espejo de cámara selfie */
         transform: scaleX(-1);
     }
 
-    /* Línea donde se detectará el objeto */
+    /* Línea de detección */
     .linea {
         position: absolute;
         top: 50%;
         left: 0;
         width: 100%;
-        height: 4px;
+        height: 5px;
         background: red;
-        box-shadow: 0 0 10px red;
+        box-shadow: 0 0 12px red;
     }
 
     button {
         margin: 10px 5px;
-        padding: 12px 20px;
+        padding: 13px 20px;
         border: none;
         border-radius: 10px;
         font-size: 17px;
@@ -65,9 +68,17 @@
         color: white;
     }
 
+    button:active {
+        transform: scale(0.96);
+    }
+
     #estado {
         color: #aaa;
         margin: 10px;
+    }
+
+    #canvas {
+        display: none;
     }
 </style>
 </head>
@@ -79,22 +90,33 @@
 <div id="contador">0</div>
 
 <div class="camara">
+
+    <!-- Cámara frontal -->
     <video id="video" autoplay playsinline></video>
+
+    <!-- Línea de detección -->
     <div class="linea"></div>
+
 </div>
 
 <p id="estado">Cámara apagada</p>
 
-<button onclick="iniciar()">Iniciar cámara</button>
-<button onclick="reiniciar()">Reiniciar contador</button>
+<button onclick="iniciar()">
+    📷 Iniciar cámara
+</button>
 
-<canvas id="canvas" style="display:none;"></canvas>
+<button onclick="reiniciar()">
+    🔄 Reiniciar
+</button>
+
+<canvas id="canvas"></canvas>
+
 
 <script>
 
-let video = document.getElementById("video");
-let canvas = document.getElementById("canvas");
-let ctx = canvas.getContext("2d");
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
 let contador = 0;
 let anterior = null;
@@ -102,27 +124,71 @@ let anterior = null;
 let detectando = false;
 let ultimoConteo = 0;
 
-// Tiempo mínimo entre dos conteos
-const ESPERA = 800;
+/*
+    Tiempo mínimo entre detecciones.
+    Evita que un mismo objeto
+    cuente muchas veces.
+*/
+const ESPERA = 1000;
 
-// Iniciar cámara frontal
+
+// ========================================
+// INICIAR CÁMARA FRONTAL
+// ========================================
+
 async function iniciar() {
 
     try {
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: "user"
-            },
-            audio: false
-        });
+        // Intentar detener una cámara anterior
+        if (video.srcObject) {
 
+            video.srcObject
+                .getTracks()
+                .forEach(track => track.stop());
+        }
+
+
+        /*
+            "user" = cámara frontal/selfie.
+
+            "exact" hace que el navegador
+            intente obligatoriamente utilizar
+            la cámara frontal.
+        */
+
+        const stream =
+            await navigator.mediaDevices.getUserMedia({
+
+                video: {
+                    facingMode: {
+                        exact: "user"
+                    },
+
+                    width: {
+                        ideal: 1280
+                    },
+
+                    height: {
+                        ideal: 720
+                    }
+                },
+
+                audio: false
+            });
+
+
+        // Mostrar cámara
         video.srcObject = stream;
 
-        document.getElementById("estado").textContent =
-            "Cámara activa. Pasa un objeto por la línea roja.";
 
+        document.getElementById("estado").textContent =
+            "📷 Cámara frontal activa";
+
+
+        // Cuando la cámara esté lista
         video.onloadedmetadata = () => {
+
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
 
@@ -131,57 +197,125 @@ async function iniciar() {
             detectar();
         };
 
+
     } catch (error) {
 
         console.error(error);
 
         document.getElementById("estado").textContent =
-            "No se pudo acceder a la cámara.";
+            "❌ No se pudo abrir la cámara frontal.";
+
+        alert(
+            "No se pudo acceder a la cámara frontal.\n\n" +
+            "Comprueba que el navegador tenga permiso para usar la cámara."
+        );
     }
 }
 
 
-// Detectar movimiento
+// ========================================
+// DETECCIÓN DE MOVIMIENTO
+// ========================================
+
 function detectar() {
 
     if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+
         requestAnimationFrame(detectar);
+
         return;
     }
 
-    // Tomamos solamente una franja central de la imagen
-    const y = Math.floor(canvas.height * 0.45);
-    const alto = Math.floor(canvas.height * 0.10);
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    /*
+        Zona donde vamos a buscar movimiento.
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        Aproximadamente el centro de la imagen.
+    */
 
-    const actual = ctx.getImageData(
+    const y =
+        Math.floor(canvas.height * 0.45);
+
+    const alto =
+        Math.floor(canvas.height * 0.10);
+
+
+    // Dibujar imagen de la cámara
+    ctx.drawImage(
+        video,
         0,
-        y,
+        0,
         canvas.width,
-        alto
+        canvas.height
     );
+
+
+    // Obtener solamente la franja central
+    const actual =
+        ctx.getImageData(
+            0,
+            y,
+            canvas.width,
+            alto
+        );
+
+
+    // Comparar con el cuadro anterior
 
     if (anterior) {
 
         let diferencia = 0;
 
-        // Comparar píxeles con la imagen anterior
-        for (let i = 0; i < actual.data.length; i += 16) {
 
-            const r = Math.abs(actual.data[i] - anterior.data[i]);
-            const g = Math.abs(actual.data[i + 1] - anterior.data[i + 1]);
-            const b = Math.abs(actual.data[i + 2] - anterior.data[i + 2]);
+        /*
+            Revisamos los píxeles.
+
+            Saltamos algunos píxeles para que
+            el teléfono tenga menos trabajo.
+        */
+
+        for (
+            let i = 0;
+            i < actual.data.length;
+            i += 16
+        ) {
+
+            const r =
+                Math.abs(
+                    actual.data[i] -
+                    anterior.data[i]
+                );
+
+            const g =
+                Math.abs(
+                    actual.data[i + 1] -
+                    anterior.data[i + 1]
+                );
+
+            const b =
+                Math.abs(
+                    actual.data[i + 2] -
+                    anterior.data[i + 2]
+                );
+
+
+            /*
+                Si hay suficiente diferencia
+                entre imágenes, consideramos
+                que pasó algo.
+            */
 
             if (r + g + b > 100) {
+
                 diferencia++;
             }
         }
 
-        // Si suficiente parte de la zona cambió
+
+        // ====================================
+        // CONTAR
+        // ====================================
+
         if (
             diferencia > 300 &&
             !detectando &&
@@ -190,32 +324,59 @@ function detectar() {
 
             contador++;
 
-            document.getElementById("contador").textContent =
-                contador;
 
-            ultimoConteo = Date.now();
+            document.getElementById(
+                "contador"
+            ).textContent = contador;
+
+
+            ultimoConteo =
+                Date.now();
+
+
             detectando = true;
 
+
+            /*
+                Esperamos antes de permitir
+                otro conteo.
+            */
+
             setTimeout(() => {
+
                 detectando = false;
+
             }, ESPERA);
         }
     }
 
+
+    // Guardar imagen actual
     anterior = actual;
 
+
+    // Continuar analizando
     requestAnimationFrame(detectar);
 }
 
 
-// Reiniciar
+// ========================================
+// REINICIAR CONTADOR
+// ========================================
+
 function reiniciar() {
 
     contador = 0;
 
-    document.getElementById("contador").textContent = "0";
+    document.getElementById(
+        "contador"
+    ).textContent = "0";
 
     anterior = null;
+
+    detectando = false;
+
+    ultimoConteo = 0;
 }
 
 </script>
