@@ -2,147 +2,223 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Contador con cámara</title>
+
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#111;color:#fff;font-family:Arial,sans-serif;text-align:center}
-h1{font-size:22px;margin:14px 0 8px}
-#wrap{position:relative;width:100%;max-width:720px;margin:auto;background:#000;overflow:hidden}
-video,canvas{display:block;width:100%;height:auto}
-canvas{position:absolute;left:0;top:0}
-#count{font-size:64px;font-weight:bold;margin:8px 0}
-button{border:0;border-radius:12px;padding:12px 18px;margin:5px;font-size:16px;font-weight:bold}
-#start{background:#35c759;color:#fff}
-#reset{background:#444;color:#fff}
-#status{font-size:14px;color:#bbb;margin:8px 15px 14px}
-small{display:block;color:#888;margin:0 15px 15px}
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        background: #111;
+        color: white;
+        font-family: Arial, sans-serif;
+        text-align: center;
+    }
+
+    h1 {
+        margin: 15px 0 5px;
+    }
+
+    #contador {
+        font-size: 60px;
+        font-weight: bold;
+        margin: 10px;
+    }
+
+    .camara {
+        position: relative;
+        width: 95%;
+        max-width: 600px;
+        margin: auto;
+        overflow: hidden;
+        border-radius: 15px;
+        background: black;
+    }
+
+    video {
+        width: 100%;
+        display: block;
+        transform: scaleX(-1);
+    }
+
+    /* Línea donde se detectará el objeto */
+    .linea {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: red;
+        box-shadow: 0 0 10px red;
+    }
+
+    button {
+        margin: 10px 5px;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 10px;
+        font-size: 17px;
+        background: #2196f3;
+        color: white;
+    }
+
+    #estado {
+        color: #aaa;
+        margin: 10px;
+    }
 </style>
 </head>
+
 <body>
-<h1>📷 Contador de objetos</h1>
-<div id="count">0</div>
-<div id="wrap">
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="canvas"></canvas>
-</div>
-<div>
-  <button id="start">▶ Iniciar cámara</button>
-  <button id="reset">↻ Reiniciar</button>
-</div>
-<div id="status">Pulsa «Iniciar cámara» y permite el acceso.</div>
-<small>El contador suma cuando un objeto detectado cruza la línea central.</small>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+<h1>Contador</h1>
+
+<div id="contador">0</div>
+
+<div class="camara">
+    <video id="video" autoplay playsinline></video>
+    <div class="linea"></div>
+</div>
+
+<p id="estado">Cámara apagada</p>
+
+<button onclick="iniciar()">Iniciar cámara</button>
+<button onclick="reiniciar()">Reiniciar contador</button>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
 <script>
-const video=document.getElementById('video');
-const canvas=document.getElementById('canvas');
-const ctx=canvas.getContext('2d');
-const countEl=document.getElementById('count');
-const statusEl=document.getElementById('status');
-let model=null,stream=null,running=false,count=0,lastTime=0;
-let tracks=[],nextId=1;
 
-const allowed = new Set([
-  'person','bicycle','car','motorcycle','bus','truck',
-  'backpack','handbag','suitcase','bottle','cup','chair',
-  'book','cell phone','laptop','mouse','keyboard','sports ball'
-]);
+let video = document.getElementById("video");
+let canvas = document.getElementById("canvas");
+let ctx = canvas.getContext("2d");
 
-function reset(){
-  count=0; countEl.textContent='0'; tracks=[]; nextId=1;
-}
-document.getElementById('reset').onclick=reset;
+let contador = 0;
+let anterior = null;
 
-function center(b){
-  return {x:b[0]+b[2]/2,y:b[1]+b[3]/2};
-}
-function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+let detectando = false;
+let ultimoConteo = 0;
 
-function drawLine(){
-  const y=canvas.height/2;
-  ctx.strokeStyle='#00ff66'; ctx.lineWidth=4;
-  ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();
-  ctx.font='bold 18px Arial';ctx.fillStyle='#00ff66';
-  ctx.fillText('LÍNEA DE CONTEO',12,y-10);
-}
+// Tiempo mínimo entre dos conteos
+const ESPERA = 800;
 
-function drawBox(p, color){
-  const [x,y,w,h]=p.bbox;
-  ctx.strokeStyle=color;ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);
-  ctx.fillStyle=color;ctx.font='bold 15px Arial';
-  ctx.fillText(p.class+' '+Math.round(p.score*100)+'%',x,y>20?y-5:y+17);
-}
+// Iniciar cámara frontal
+async function iniciar() {
 
-function updateTracks(preds){
-  const now=Date.now();
-  const detections=preds.map(p=>({p,c:center(p.bbox)}));
-  const used=new Set();
+    try {
 
-  for(const d of detections){
-    let best=null,bestD=Infinity;
-    for(const t of tracks){
-      if(used.has(t.id)) continue;
-      const dd=dist(d.c,t.c);
-      const maxD=Math.max(45, Math.min(canvas.width,canvas.height)*0.12);
-      if(dd<bestD && dd<maxD){bestD=dd;best=t;}
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: "user"
+            },
+            audio: false
+        });
+
+        video.srcObject = stream;
+
+        document.getElementById("estado").textContent =
+            "Cámara activa. Pasa un objeto por la línea roja.";
+
+        video.onloadedmetadata = () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            anterior = null;
+
+            detectar();
+        };
+
+    } catch (error) {
+
+        console.error(error);
+
+        document.getElementById("estado").textContent =
+            "No se pudo acceder a la cámara.";
     }
-    if(best){
-      used.add(best.id);
-      const oldY=best.c.y, newY=d.c.y;
-      const mid=canvas.height/2;
-      // Cuenta solo cuando el centro cruza la línea.
-      if((oldY<mid && newY>=mid)||(oldY>mid && newY<=mid)){
-        count++; countEl.textContent=count;
-        if(navigator.vibrate) navigator.vibrate(80);
-      }
-      best.c=d.c;best.bbox=d.p.bbox;best.class=d.p.class;best.score=d.p.score;best.last=now;
-      d.p._color=best.counted ? '#ffcc00':'#00ff66';
-    }else{
-      tracks.push({id:nextId++,c:d.c,bbox:d.p.bbox,class:d.p.class,score:d.p.score,last:now});
-      d.p._color='#00ff66';
+}
+
+
+// Detectar movimiento
+function detectar() {
+
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+        requestAnimationFrame(detectar);
+        return;
     }
-  }
-  tracks=tracks.filter(t=>now-t.last<700);
+
+    // Tomamos solamente una franja central de la imagen
+    const y = Math.floor(canvas.height * 0.45);
+    const alto = Math.floor(canvas.height * 0.10);
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const actual = ctx.getImageData(
+        0,
+        y,
+        canvas.width,
+        alto
+    );
+
+    if (anterior) {
+
+        let diferencia = 0;
+
+        // Comparar píxeles con la imagen anterior
+        for (let i = 0; i < actual.data.length; i += 16) {
+
+            const r = Math.abs(actual.data[i] - anterior.data[i]);
+            const g = Math.abs(actual.data[i + 1] - anterior.data[i + 1]);
+            const b = Math.abs(actual.data[i + 2] - anterior.data[i + 2]);
+
+            if (r + g + b > 100) {
+                diferencia++;
+            }
+        }
+
+        // Si suficiente parte de la zona cambió
+        if (
+            diferencia > 300 &&
+            !detectando &&
+            Date.now() - ultimoConteo > ESPERA
+        ) {
+
+            contador++;
+
+            document.getElementById("contador").textContent =
+                contador;
+
+            ultimoConteo = Date.now();
+            detectando = true;
+
+            setTimeout(() => {
+                detectando = false;
+            }, ESPERA);
+        }
+    }
+
+    anterior = actual;
+
+    requestAnimationFrame(detectar);
 }
 
-async function loop(){
-  if(!running)return;
-  if(video.readyState>=2){
-    const preds=await model.detect(video,20,0.55);
-    const filtered=preds.filter(p=>allowed.has(p.class));
-    // Dibujar en coordenadas del video/canvas.
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    drawLine();
-    updateTracks(filtered);
-    for(const p of filtered) drawBox(p,p._color||'#00ff66');
-    statusEl.textContent='Detectando objetos…';
-  }
-  requestAnimationFrame(loop);
+
+// Reiniciar
+function reiniciar() {
+
+    contador = 0;
+
+    document.getElementById("contador").textContent = "0";
+
+    anterior = null;
 }
 
-async function start(){
-  if(running)return;
-  try{
-    statusEl.textContent='Cargando modelo de detección…';
-    model=await cocoSsd.load({base:'lite_mobilenet_v2'});
-    stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},
-      audio:false
-    });
-    video.srcObject=stream;
-    await video.play();
-    canvas.width=video.videoWidth||640;
-    canvas.height=video.videoHeight||480;
-    running=true;
-    statusEl.textContent='Detectando objetos…';
-    loop();
-  }catch(e){
-    statusEl.textContent='No se pudo iniciar: '+e.message;
-  }
-}
-document.getElementById('start').onclick=start;
 </script>
+
 </body>
 </html>
