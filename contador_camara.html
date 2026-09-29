@@ -1,385 +1,629 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Contador con cámara frontal</title>
+  <meta charset="UTF-8">
 
-<style>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Consulta de precios</title>
+
+
+  <style>
+
     * {
-        box-sizing: border-box;
+      box-sizing: border-box;
     }
+
 
     body {
-        margin: 0;
-        background: #111;
-        color: white;
-        font-family: Arial, sans-serif;
-        text-align: center;
+
+      margin: 0;
+
+      min-height: 100vh;
+
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+
+      background: #eeeeee;
+
+      display: flex;
+
+      justify-content: center;
+
+      align-items: center;
+
+      padding: 20px;
+
     }
+
+
+    .contenedor {
+
+      width: 100%;
+
+      max-width: 430px;
+
+      background: white;
+
+      padding: 30px;
+
+      border-radius: 22px;
+
+      box-shadow:
+        0 10px 30px
+        rgba(0, 0, 0, 0.12);
+
+      text-align: center;
+
+    }
+
 
     h1 {
-        margin: 15px 0 5px;
+
+      margin: 0;
+
+      font-size: 32px;
+
+      font-weight: 700;
+
+      color: #111;
+
     }
 
-    #contador {
-        font-size: 65px;
-        font-weight: bold;
-        margin: 5px;
+
+    .descripcion {
+
+      margin-top: 10px;
+
+      margin-bottom: 25px;
+
+      font-size: 17px;
+
+      color: #777;
+
     }
 
-    .camara {
-        position: relative;
-        width: 95%;
-        max-width: 600px;
-        margin: auto;
-        overflow: hidden;
-        border-radius: 15px;
-        background: black;
+
+    input {
+
+      width: 100%;
+
+      padding: 16px;
+
+      font-size: 21px;
+
+      text-align: center;
+
+      border: 2px solid #dddddd;
+
+      border-radius: 12px;
+
+      outline: none;
+
     }
 
-    video {
-        width: 100%;
-        display: block;
 
-        /* Efecto espejo de cámara selfie */
-        transform: scaleX(-1);
+    input:focus {
+
+      border-color: #222;
+
     }
 
-    /* Línea de detección */
-    .linea {
-        position: absolute;
-        top: 50%;
-        left: 0;
-        width: 100%;
-        height: 5px;
-        background: red;
-        box-shadow: 0 0 12px red;
-    }
 
     button {
-        margin: 10px 5px;
-        padding: 13px 20px;
-        border: none;
-        border-radius: 10px;
-        font-size: 17px;
-        background: #2196f3;
-        color: white;
+
+      width: 100%;
+
+      margin-top: 15px;
+
+      padding: 16px;
+
+      border: none;
+
+      border-radius: 12px;
+
+      background: #222;
+
+      color: white;
+
+      font-size: 18px;
+
+      font-weight: bold;
+
+      cursor: pointer;
+
     }
+
 
     button:active {
-        transform: scale(0.96);
+
+      transform: scale(0.98);
+
     }
 
-    #estado {
-        color: #aaa;
-        margin: 10px;
+
+    button:disabled {
+
+      opacity: 0.6;
+
+      cursor: not-allowed;
+
     }
 
-    #canvas {
-        display: none;
+
+    #resultado {
+
+      margin-top: 25px;
+
     }
-</style>
+
+
+    .producto {
+
+      background: #f6f6f6;
+
+      border-radius: 16px;
+
+      padding: 22px;
+
+      border: 1px solid #eeeeee;
+
+    }
+
+
+    .etiqueta {
+
+      font-size: 13px;
+
+      font-weight: bold;
+
+      letter-spacing: 1px;
+
+      color: #888;
+
+      text-transform: uppercase;
+
+      margin-bottom: 7px;
+
+    }
+
+
+    .nombre {
+
+      font-size: 27px;
+
+      font-weight: bold;
+
+      color: #111;
+
+      margin-bottom: 22px;
+
+      word-wrap: break-word;
+
+    }
+
+
+    .precio {
+
+      font-size: 36px;
+
+      font-weight: 800;
+
+      color: #111;
+
+    }
+
+
+    .mensaje {
+
+      padding: 15px;
+
+      background: #fff3cd;
+
+      border-radius: 12px;
+
+      color: #664d03;
+
+      font-size: 16px;
+
+    }
+
+
+    .error {
+
+      padding: 15px;
+
+      background: #f8d7da;
+
+      border-radius: 12px;
+
+      color: #842029;
+
+      font-size: 16px;
+
+    }
+
+
+    .cargando {
+
+      color: #777;
+
+      font-size: 16px;
+
+    }
+
+
+    @media (max-width: 480px) {
+
+      .contenedor {
+
+        padding: 25px;
+
+      }
+
+
+      h1 {
+
+        font-size: 29px;
+
+      }
+
+
+      .nombre {
+
+        font-size: 25px;
+
+      }
+
+
+      .precio {
+
+        font-size: 34px;
+
+      }
+
+    }
+
+  </style>
+
 </head>
+
 
 <body>
 
-<h1>Contador</h1>
 
-<div id="contador">0</div>
-
-<div class="camara">
-
-    <!-- Cámara frontal -->
-    <video id="video" autoplay playsinline></video>
-
-    <!-- Línea de detección -->
-    <div class="linea"></div>
-
-</div>
-
-<p id="estado">Cámara apagada</p>
-
-<button onclick="iniciar()">
-    📷 Iniciar cámara
-</button>
-
-<button onclick="reiniciar()">
-    🔄 Reiniciar
-</button>
-
-<canvas id="canvas"></canvas>
+  <div class="contenedor">
 
 
-<script>
-
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
-let contador = 0;
-let anterior = null;
-
-let detectando = false;
-let ultimoConteo = 0;
-
-/*
-    Tiempo mínimo entre detecciones.
-    Evita que un mismo objeto
-    cuente muchas veces.
-*/
-const ESPERA = 1000;
+    <h1>
+      Consulta de precios
+    </h1>
 
 
-// ========================================
-// INICIAR CÁMARA FRONTAL
-// ========================================
-
-async function iniciar() {
-
-    try {
-
-        // Intentar detener una cámara anterior
-        if (video.srcObject) {
-
-            video.srcObject
-                .getTracks()
-                .forEach(track => track.stop());
-        }
+    <div class="descripcion">
+      Ingresá el código del producto
+    </div>
 
 
-        /*
-            "user" = cámara frontal/selfie.
-
-            "exact" hace que el navegador
-            intente obligatoriamente utilizar
-            la cámara frontal.
-        */
-
-        const stream =
-            await navigator.mediaDevices.getUserMedia({
-
-                video: {
-                    facingMode: {
-                        exact: "user"
-                    },
-
-                    width: {
-                        ideal: 1280
-                    },
-
-                    height: {
-                        ideal: 720
-                    }
-                },
-
-                audio: false
-            });
+    <input
+      id="codigo"
+      type="text"
+      inputmode="numeric"
+      placeholder="Ejemplo: 1"
+      autocomplete="off"
+    >
 
 
-        // Mostrar cámara
-        video.srcObject = stream;
+    <button
+      id="boton"
+      onclick="buscar()"
+    >
+      BUSCAR
+    </button>
 
 
-        document.getElementById("estado").textContent =
-            "📷 Cámara frontal activa";
+    <div id="resultado"></div>
 
 
-        // Cuando la cámara esté lista
-        video.onloadedmetadata = () => {
-
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-
-            anterior = null;
-
-            detectar();
-        };
+  </div>
 
 
-    } catch (error) {
 
-        console.error(error);
-
-        document.getElementById("estado").textContent =
-            "❌ No se pudo abrir la cámara frontal.";
-
-        alert(
-            "No se pudo acceder a la cámara frontal.\n\n" +
-            "Comprueba que el navegador tenga permiso para usar la cámara."
-        );
-    }
-}
+  <script>
 
 
-// ========================================
-// DETECCIÓN DE MOVIMIENTO
-// ========================================
+    // =========================================
+    // URL DE GOOGLE APPS SCRIPT
+    // =========================================
 
-function detectar() {
+    const API =
+      "https://script.google.com/macros/s/AKfycbwmfyweiVfG3AVAq0zJFfGnoJjbf6Y5ELnupvWKowSEJ-X85-MTulQCfBlxnrty0TBf/exec";
 
-    if (video.readyState !== video.HAVE_ENOUGH_DATA) {
 
-        requestAnimationFrame(detectar);
+
+    // =========================================
+    // BUSCAR PRODUCTO
+    // =========================================
+
+    function buscar() {
+
+
+      const codigo =
+        document
+          .getElementById("codigo")
+          .value
+          .trim();
+
+
+      const resultado =
+        document
+          .getElementById("resultado");
+
+
+      const boton =
+        document
+          .getElementById("boton");
+
+
+
+      // No hay código
+
+      if (codigo === "") {
+
+        resultado.innerHTML = `
+
+          <div class="mensaje">
+
+            Ingresá un código de producto.
+
+          </div>
+
+        `;
 
         return;
-    }
+
+      }
 
 
-    /*
-        Zona donde vamos a buscar movimiento.
 
-        Aproximadamente el centro de la imagen.
-    */
+      // Mostrar cargando
 
-    const y =
-        Math.floor(canvas.height * 0.45);
+      resultado.innerHTML = `
 
-    const alto =
-        Math.floor(canvas.height * 0.10);
+        <div class="cargando">
 
+          Buscando producto...
 
-    // Dibujar imagen de la cámara
-    ctx.drawImage(
-        video,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
+        </div>
+
+      `;
 
 
-    // Obtener solamente la franja central
-    const actual =
-        ctx.getImageData(
-            0,
-            y,
-            canvas.width,
-            alto
-        );
+      boton.disabled = true;
 
 
-    // Comparar con el cuadro anterior
 
-    if (anterior) {
+      // Crear callback único
 
-        let diferencia = 0;
+      const callback =
+        "respuesta_" + Date.now();
 
 
-        /*
-            Revisamos los píxeles.
+      let terminado = false;
 
-            Saltamos algunos píxeles para que
-            el teléfono tenga menos trabajo.
-        */
 
-        for (
-            let i = 0;
-            i < actual.data.length;
-            i += 16
-        ) {
 
-            const r =
-                Math.abs(
-                    actual.data[i] -
-                    anterior.data[i]
+      // =========================================
+      // RESPUESTA DE GOOGLE
+      // =========================================
+
+      window[callback] = function(datos) {
+
+
+        terminado = true;
+
+        boton.disabled = false;
+
+
+
+        // Producto encontrado
+
+        if (datos && datos.ok) {
+
+
+          let precio =
+            String(datos.precio)
+              .replace(/\$/g, "")
+              .trim();
+
+
+          // Formato de precio argentino
+          // 2500 -> 2.500
+
+          if (
+            !isNaN(precio) &&
+            precio !== ""
+          ) {
+
+            const numero =
+              Number(
+                precio
+                  .replace(/\./g, "")
+                  .replace(",", ".")
+              );
+
+
+            if (!isNaN(numero)) {
+
+              precio =
+                numero.toLocaleString(
+                  "es-AR"
                 );
 
-            const g =
-                Math.abs(
-                    actual.data[i + 1] -
-                    anterior.data[i + 1]
-                );
-
-            const b =
-                Math.abs(
-                    actual.data[i + 2] -
-                    anterior.data[i + 2]
-                );
-
-
-            /*
-                Si hay suficiente diferencia
-                entre imágenes, consideramos
-                que pasó algo.
-            */
-
-            if (r + g + b > 100) {
-
-                diferencia++;
             }
+
+          }
+
+
+          resultado.innerHTML = `
+
+            <div class="producto">
+
+
+              <div class="etiqueta">
+                Nombre de producto
+              </div>
+
+
+              <div class="nombre">
+                ${datos.nombre}
+              </div>
+
+
+              <div class="etiqueta">
+                Precio
+              </div>
+
+
+              <div class="precio">
+                $${precio}
+              </div>
+
+
+            </div>
+
+          `;
+
         }
 
 
-        // ====================================
-        // CONTAR
-        // ====================================
+        // Producto no encontrado
 
-        if (
-            diferencia > 300 &&
-            !detectando &&
-            Date.now() - ultimoConteo > ESPERA
-        ) {
+        else {
 
-            contador++;
+          resultado.innerHTML = `
 
+            <div class="mensaje">
 
-            document.getElementById(
-                "contador"
-            ).textContent = contador;
+              Producto no encontrado.
 
+            </div>
 
-            ultimoConteo =
-                Date.now();
+          `;
 
-
-            detectando = true;
-
-
-            /*
-                Esperamos antes de permitir
-                otro conteo.
-            */
-
-            setTimeout(() => {
-
-                detectando = false;
-
-            }, ESPERA);
         }
+
+
+
+        // Limpiar
+
+        delete window[callback];
+
+
+        if (script) {
+          script.remove();
+        }
+
+      };
+
+
+
+      // =========================================
+      // CREAR SOLICITUD
+      // =========================================
+
+      const script =
+        document.createElement("script");
+
+
+      script.src =
+        API +
+        "?codigo=" +
+        encodeURIComponent(codigo) +
+        "&callback=" +
+        callback;
+
+
+
+      // =========================================
+      // TIEMPO DE ESPERA
+      // =========================================
+
+      setTimeout(function() {
+
+
+        if (!terminado) {
+
+
+          resultado.innerHTML = `
+
+            <div class="error">
+
+              No se pudo obtener la información.
+
+              <br><br>
+
+              Intentá nuevamente.
+
+            </div>
+
+          `;
+
+
+          boton.disabled = false;
+
+
+          delete window[callback];
+
+
+          if (script) {
+            script.remove();
+          }
+
+        }
+
+      }, 10000);
+
+
+
+      // Ejecutar solicitud
+
+      document.body.appendChild(script);
+
     }
 
 
-    // Guardar imagen actual
-    anterior = actual;
+
+    // =========================================
+    // BUSCAR CON ENTER
+    // =========================================
+
+    document
+      .getElementById("codigo")
+      .addEventListener(
+        "keydown",
+        function(event) {
+
+          if (event.key === "Enter") {
+
+            buscar();
+
+          }
+
+        }
+      );
 
 
-    // Continuar analizando
-    requestAnimationFrame(detectar);
-}
+  </script>
 
-
-// ========================================
-// REINICIAR CONTADOR
-// ========================================
-
-function reiniciar() {
-
-    contador = 0;
-
-    document.getElementById(
-        "contador"
-    ).textContent = "0";
-
-    anterior = null;
-
-    detectando = false;
-
-    ultimoConteo = 0;
-}
-
-</script>
 
 </body>
+
 </html>
